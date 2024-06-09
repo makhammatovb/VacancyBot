@@ -28,7 +28,7 @@
     <inspection_tool class="PyPackageRequirementsInspection" enabled="true" level="WARNING" enabled_by_default="true">
       <option name="ignoredPackages">
         <value>
-          <list size="27">
+          <list size="41">
             <item index="0" class="java.lang.String" itemvalue="Django" />
             <item index="1" class="java.lang.String" itemvalue="pillow" />
             <item index="2" class="java.lang.String" itemvalue="psycopg2" />
@@ -56,6 +56,20 @@
             <item index="24" class="java.lang.String" itemvalue="Jinja2" />
             <item index="25" class="java.lang.String" itemvalue="coreschema" />
             <item index="26" class="java.lang.String" itemvalue="idna" />
+            <item index="27" class="java.lang.String" itemvalue="annotated-types" />
+            <item index="28" class="java.lang.String" itemvalue="pydantic" />
+            <item index="29" class="java.lang.String" itemvalue="Babel" />
+            <item index="30" class="java.lang.String" itemvalue="magic-filter" />
+            <item index="31" class="java.lang.String" itemvalue="aiofiles" />
+            <item index="32" class="java.lang.String" itemvalue="aiogram" />
+            <item index="33" class="java.lang.String" itemvalue="attrs" />
+            <item index="34" class="java.lang.String" itemvalue="frozenlist" />
+            <item index="35" class="java.lang.String" itemvalue="pydantic_core" />
+            <item index="36" class="java.lang.String" itemvalue="typing_extensions" />
+            <item index="37" class="java.lang.String" itemvalue="aiohttp" />
+            <item index="38" class="java.lang.String" itemvalue="multidict" />
+            <item index="39" class="java.lang.String" itemvalue="yarl" />
+            <item index="40" class="java.lang.String" itemvalue="aiosignal" />
           </list>
         </value>
       </option>
