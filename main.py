@@ -5,6 +5,7 @@ from aiogram.contrib.fsm_storage.memory import MemoryStorage
 from aiogram.dispatcher.filters.state import State, StatesGroup
 from aiogram.dispatcher import FSMContext
 import aiogram
+from aiogram.contrib.middlewares.logging import LoggingMiddleware
 
 import os
 import django
@@ -18,6 +19,7 @@ bot = Bot("7448678922:AAHkZkmXViaNENu-vGTQOodsbI60dBsWF7U")
 dp = Dispatcher(bot=bot,storage=MemoryStorage())
 db = Database('vacation.db')
 db.init_db()
+dp.middleware.setup(LoggingMiddleware())
 
 class Form(StatesGroup):
     name = State()
@@ -29,7 +31,9 @@ class Form(StatesGroup):
     confirmation = State()
     duplicate_contact = State()
     vacation_types = State()
+    questions = State()
     vacations = State()
+
 
 @dp.message_handler(commands=["start"])
 async def start(message: types.Message):
@@ -85,18 +89,20 @@ async def ask_name(message: types.Message):
     await dp.current_state().set_state("name")
     await dp.current_state().update_data(contact=contact)
 
-async def process_name(message: types.Message):
-    if (await dp.current_state().get_state()) == "name":
+@dp.message_handler(state=Form.name)
+async def process_name(message: types.Message, state: FSMContext):
+    # if (await dp.current_state().get_state()) == "name":
         name = message.text
+        await state.update_data(name=name)
 
-        data = await dp.current_state().get_data()
+        data = await state.get_data()
         surname_text = data.get("surname_text")
         if not surname_text:
             surname_text = "Введите вашу фамилию"
         await bot.send_message(message.chat.id, surname_text)
 
         await dp.current_state().set_state("surname")
-        await dp.current_state().update_data(name=name)
+        # await dp.current_state().update_data(name=name)
 
         dp.register_message_handler(process_surname, content_types=types.ContentTypes.TEXT, state="surname")
 
@@ -318,9 +324,10 @@ async def process_confirmation(message: types.Message, state: FSMContext):
         }
 
         db.insert_user_data(user_info)
+
         await message.answer("Ma'lumotlaringiz saqlandi!" if data.get("lang") == "UZ" else "Ваши данные сохранены!",
                              reply_markup = types.ReplyKeyboardRemove())
-        await state.finish()
+        # await state.finish()
 
         vacation_types = db.get_vacation_type()
         keyboard = types.ReplyKeyboardMarkup(resize_keyboard=True)
@@ -359,8 +366,297 @@ async def process_duplicate_contact(message: types.Message, state: FSMContext):
 async def process_vacation_selection(message: types.Message, state: FSMContext):
     selected_vacation_type = message.text
     await state.update_data(vacation_type=selected_vacation_type)
-    data = await state.get_data("lang")
+    data = await state.get_data()
     lang = data.get("lang")
+
+    questions = db.get_questions(selected_vacation_type, lang)
+    if not questions:
+        if lang == "UZ":
+            await message.reply("Bu sohada savollar topilmadi")
+        else:
+            await message.reply("В этом поле вопросов не найдено")
+
+        vacations = db.get_vacations(selected_vacation_type, lang)
+
+        if vacations:
+            for vacation in vacations:
+                if lang == "UZ":
+                    if len(vacation) >= 10:
+                        image_uz, name_uz, company, location_uz, requirements_uz, amenities_uz, salary, experience, contacts1, contacts2 = vacation[
+                                                                                                                                           :10]
+                    else:
+                        print("Unexpected number of fields:", len(vacation))
+                        continue
+
+                    if image_uz:
+                        image_uz_path = f"media/{image_uz.strip()}"
+                        try:
+                            with open(image_uz_path, "rb") as photo:
+                                caption = (
+                                    f"🔰<b>Ishchi:</b> {name_uz.strip()}\n\n"
+                                    f"🏢<b>Kompaniya:</b> {company.strip()}\n\n"
+                                    f"📍<b>Manzil:</b> {location_uz.strip()}\n\n"
+                                    f"❗️<b>Talablar:</b>\n {requirements_uz.strip()}\n\n"
+                                    f"✅<b>Qulayliklar:</b>\n {amenities_uz.strip()}\n\n"
+                                    f"💵<b>Maosh:</b> ${salary.strip()}\n\n"
+                                    f"📊<b>Tajriba:</b> {experience.strip()} yil\n\n"
+                                    f"☎️<b>Aloqa uchun:</b> {contacts1.strip()}"
+                                )
+                                await bot.send_photo(message.chat.id, photo=photo, caption=caption, parse_mode='HTML')
+                        except FileNotFoundError:
+                            print(f"Image file not found: {image_uz_path}")
+                            await message.answer("An error occurred while displaying the image: File not found.")
+                            continue
+                        except aiogram.utils.exceptions.BadRequest as e:
+                            print(f"Failed to send photo: {e}")
+                            await message.answer(f"An error occurred while displaying the image for {name_uz}.")
+                            continue
+                    else:
+                        vacation_info = (
+                            f"🔰*Ishchi:* {name_uz.strip()}\n\n"
+                            f"🏢*Kompaniya:* {company.strip()}\n\n"
+                            f"📍*Manzil:* {location_uz.strip()}\n\n"
+                            f"❗️*Talablar:*\n {requirements_uz.strip()}\n\n"
+                            f"✅*Qulayliklar:*\n {amenities_uz.strip()}\n\n"
+                            f"💵*Maosh:* ${salary.strip()}\n\n"
+                            f"📊*Tajriba:* {experience.strip()} yil\n\n"
+                            f"☎️*Aloqa uchun:* {contacts1.strip()}"
+                        )
+
+                        await message.answer(vacation_info, parse_mode='Markdown')
+                    await Form.vacation_types.set()
+                else:
+                    if len(vacation) >= 9:
+                        image_ru, name_ru, company, location_ru, requirements_ru, amenities_ru, salary, experience, contacts1, contacts2 = vacation[
+                                                                                                                                           :10]
+                    else:
+                        print("Unexpected number of fields:", len(vacation))
+                        continue
+
+                    if image_ru:
+                        image_ru_path = f"media/{image_ru.strip()}"
+                        try:
+                            with open(image_ru_path, "rb") as photo:
+                                caption = (
+                                    f"🔰<b>Рабочий:</b> {name_ru.strip()}\n\n"
+                                    f"🏢<b>Компания:</b> {company.strip()}\n\n"
+                                    f"📍<b>Местоположение:</b> {location_ru.strip()}\n\n"
+                                    f"❗️<b>Требования:</b>\n {requirements_ru.strip()}\n\n"
+                                    f"✅<b>Удобства:</b>\n {amenities_ru.strip()}\n\n"
+                                    f"💵<b>Заработная плата:</b> ${salary.strip()}\n\n"
+                                    f"📊<b>Опыт:</b> {experience.strip()} годы\n\n"
+                                    f"☎️<b>Для контакта:</b> {contacts1.strip()}"
+                                )
+                                await bot.send_photo(message.chat.id, photo=photo, caption=caption, parse_mode='HTML')
+                        except FileNotFoundError:
+                            print(f"Image file not found: {image_ru_path}")
+                            await message.answer("An error occurred while displaying the image: File not found.")
+                            continue
+                        except aiogram.utils.exceptions.BadRequest as e:
+                            print(f"Failed to send photo: {e}")
+                            await message.answer(f"An error occurred while displaying the image for {name_ru}.")
+                            continue
+                    else:
+                        vacation_info = (
+                            f"🔰*Рабочий:* {name_ru.strip()}\n\n"
+                            f"🏢*Компания:* {company.strip()}\n\n"
+                            f"📍*Местоположение:* {location_ru.strip()}\n\n"
+                            f"❗️*Требования:*\n {requirements_ru.strip()}\n\n"
+                            f"✅*Удобства:*\n {amenities_ru.strip()}\n\n"
+                            f"💵*Заработная плата:* ${salary.strip()}\n\n"
+                            f"📊*Опыт:* {experience.strip()} годы\n\n"
+                            f"☎️*Для контакта:* {contacts1.strip()}"
+                        )
+
+                        await message.answer(vacation_info, parse_mode='Markdown')
+                    await Form.vacation_types.set()
+        else:
+            if lang == "UZ":
+                await message.answer("Bu yo'nalishda ish o'rni uchun el'onlar topilmadi")
+            else:
+                await message.answer("Вакансий по данному направлению не найдено")
+            await Form.vacation_types.set()
+        return
+
+    if lang == 'UZ' and questions[0][0]:
+        question_text = questions[0][0]
+        await message.reply(question_text)
+    elif lang == 'RU' and questions[0][0]:
+        question_text = questions[0][0]
+        await message.reply(question_text)
+    else:
+        await message.reply("В этом поле вопросов не найдено")
+
+        vacations = db.get_vacations(selected_vacation_type, lang)
+
+        if vacations:
+            for vacation in vacations:
+                if lang == "UZ":
+                    if len(vacation) >= 10:
+                        image_uz, name_uz, company, location_uz, requirements_uz, amenities_uz, salary, experience, contacts1, contacts2 = vacation[
+                                                                                                                                           :10]
+                    else:
+                        print("Unexpected number of fields:", len(vacation))
+                        continue
+
+                    if image_uz:
+                        image_uz_path = f"media/{image_uz.strip()}"
+                        try:
+                            with open(image_uz_path, "rb") as photo:
+                                caption = (
+                                    f"🔰<b>Ishchi:</b> {name_uz.strip()}\n\n"
+                                    f"🏢<b>Kompaniya:</b> {company.strip()}\n\n"
+                                    f"📍<b>Manzil:</b> {location_uz.strip()}\n\n"
+                                    f"❗️<b>Talablar:</b>\n {requirements_uz.strip()}\n\n"
+                                    f"✅<b>Qulayliklar:</b>\n {amenities_uz.strip()}\n\n"
+                                    f"💵<b>Maosh:</b> ${salary.strip()}\n\n"
+                                    f"📊<b>Tajriba:</b> {experience.strip()} yil\n\n"
+                                    f"☎️<b>Aloqa uchun:</b> {contacts1.strip()}"
+                                )
+                                await bot.send_photo(message.chat.id, photo=photo, caption=caption, parse_mode='HTML')
+                        except FileNotFoundError:
+                            print(f"Image file not found: {image_uz_path}")
+                            await message.answer("An error occurred while displaying the image: File not found.")
+                            continue
+                        except aiogram.utils.exceptions.BadRequest as e:
+                            print(f"Failed to send photo: {e}")
+                            await message.answer(f"An error occurred while displaying the image for {name_uz}.")
+                            continue
+                    else:
+                        vacation_info = (
+                            f"🔰*Ishchi:* {name_uz.strip()}\n\n"
+                            f"🏢*Kompaniya:* {company.strip()}\n\n"
+                            f"📍*Manzil:* {location_uz.strip()}\n\n"
+                            f"❗️*Talablar:*\n {requirements_uz.strip()}\n\n"
+                            f"✅*Qulayliklar:*\n {amenities_uz.strip()}\n\n"
+                            f"💵*Maosh:* ${salary.strip()}\n\n"
+                            f"📊*Tajriba:* {experience.strip()} yil\n\n"
+                            f"☎️*Aloqa uchun:* {contacts1.strip()}"
+                        )
+
+                        await message.answer(vacation_info, parse_mode='Markdown')
+                    await Form.vacation_types.set()
+                else:
+                    if len(vacation) >= 9:
+                        image_ru, name_ru, company, location_ru, requirements_ru, amenities_ru, salary, experience, contacts1, contacts2 = vacation[
+                                                                                                                                           :10]
+                    else:
+                        print("Unexpected number of fields:", len(vacation))
+                        continue
+
+                    if image_ru:
+                        image_ru_path = f"media/{image_ru.strip()}"
+                        try:
+                            with open(image_ru_path, "rb") as photo:
+                                caption = (
+                                    f"🔰<b>Рабочий:</b> {name_ru.strip()}\n\n"
+                                    f"🏢<b>Компания:</b> {company.strip()}\n\n"
+                                    f"📍<b>Местоположение:</b> {location_ru.strip()}\n\n"
+                                    f"❗️<b>Требования:</b>\n {requirements_ru.strip()}\n\n"
+                                    f"✅<b>Удобства:</b>\n {amenities_ru.strip()}\n\n"
+                                    f"💵<b>Заработная плата:</b> ${salary.strip()}\n\n"
+                                    f"📊<b>Опыт:</b> {experience.strip()} годы\n\n"
+                                    f"☎️<b>Для контакта:</b> {contacts1.strip()}"
+                                )
+                                await bot.send_photo(message.chat.id, photo=photo, caption=caption, parse_mode='HTML')
+                        except FileNotFoundError:
+                            print(f"Image file not found: {image_ru_path}")
+                            await message.answer("An error occurred while displaying the image: File not found.")
+                            continue
+                        except aiogram.utils.exceptions.BadRequest as e:
+                            print(f"Failed to send photo: {e}")
+                            await message.answer(f"An error occurred while displaying the image for {name_ru}.")
+                            continue
+                    else:
+                        vacation_info = (
+                            f"🔰*Рабочий:* {name_ru.strip()}\n\n"
+                            f"🏢*Компания:* {company.strip()}\n\n"
+                            f"📍*Местоположение:* {location_ru.strip()}\n\n"
+                            f"❗️*Требования:*\n {requirements_ru.strip()}\n\n"
+                            f"✅*Удобства:*\n {amenities_ru.strip()}\n\n"
+                            f"💵*Заработная плата:* ${salary.strip()}\n\n"
+                            f"📊*Опыт:* {experience.strip()} годы\n\n"
+                            f"☎️*Для контакта:* {contacts1.strip()}"
+                        )
+
+                        await message.answer(vacation_info, parse_mode='Markdown')
+                    await Form.vacation_types.set()
+        else:
+            if lang == "UZ":
+                await message.answer("Bu yo'nalishda ish o'rni uchun el'onlar topilmadi")
+            else:
+                await message.answer("Вакансий по данному направлению не найдено")
+            await Form.vacation_types.set()
+    await Form.questions.set()
+    dp.register_message_handler(process_question_answer, content_types=types.ContentTypes.TEXT, state="questions")
+
+@dp.message_handler(state=Form.questions)
+async def process_question_answer(message: types.Message, state: FSMContext):
+    data = await state.get_data()
+    user_answer = message.text
+    selected_vacation_type = data.get("vacation_type")
+    name = data.get('name')
+    surname = data.get("surname")
+    contact = data.get("contact")
+    birth_date = data.get("birth_date")
+    region = data.get("region")
+    education = data.get("education")
+    languages = ", ".join(data.get("languages", []))
+    lang = data.get("lang")
+
+    test_id = db.get_test_id(selected_vacation_type)
+
+    if not test_id:
+        if lang == "UZ":
+            await message.reply("Bu soha bo'yicha savol topilmadi")
+        else:
+            await message.reply("В этом поле вопросов не найдено")
+        await state.finish()
+        return
+
+    user_info = {
+        "name": name,
+        "surname": surname,
+        "contact": contact,
+        "birth_date": birth_date,
+        "city": region,
+        "education": education,
+        "languages": languages
+    }
+    print(user_info)
+
+    answer = {
+        "name": name,
+        "surname": surname,
+        "birth_date": birth_date,
+        "test_id": test_id,
+        "answers": [user_answer],
+        "lang": lang
+    }
+    print(answer)
+
+    db.update_answers(
+        name=name,
+        surname=surname,
+        birth_date=birth_date,
+        test_id=test_id,
+        answers=[user_answer],
+        lang=lang
+    )
+
+    db.insert_answers(
+        name=name,
+        surname=surname,
+        birth_date=birth_date,
+        test_id=test_id,
+        answers=[user_answer],
+        lang=lang
+    )
+
+    if lang == "UZ":
+        await message.reply("Savollarga javob berganingiz uchun rahmat")
+    else:
+        await message.reply("Спасибо за ответы на вопросы")
 
     vacations = db.get_vacations(selected_vacation_type, lang)
 
@@ -368,7 +664,8 @@ async def process_vacation_selection(message: types.Message, state: FSMContext):
         for vacation in vacations:
             if lang == "UZ":
                 if len(vacation) >= 10:
-                    image_uz, name_uz, company, location_uz, requirements_uz, amenities_uz, salary, experience, contacts1, contacts2 = vacation[:10]
+                    image_uz, name_uz, company, location_uz, requirements_uz, amenities_uz, salary, experience, contacts1, contacts2 = vacation[
+                                                                                                                                       :10]
                 else:
                     print("Unexpected number of fields:", len(vacation))
                     continue
@@ -412,7 +709,8 @@ async def process_vacation_selection(message: types.Message, state: FSMContext):
                 await Form.vacation_types.set()
             else:
                 if len(vacation) >= 9:
-                    image_ru, name_ru, company, location_ru, requirements_ru, amenities_ru, salary, experience, contacts1, contacts2 = vacation[:10]
+                    image_ru, name_ru, company, location_ru, requirements_ru, amenities_ru, salary, experience, contacts1, contacts2 = vacation[
+                                                                                                                                       :10]
                 else:
                     print("Unexpected number of fields:", len(vacation))
                     continue
@@ -455,9 +753,11 @@ async def process_vacation_selection(message: types.Message, state: FSMContext):
                     await message.answer(vacation_info, parse_mode='Markdown')
                 await Form.vacation_types.set()
     else:
-        await message.answer("No vacations found for the selected type. Please select another type.")
+        if lang == "UZ":
+            await message.answer("Bu yo'nalishda ish o'rni uchun el'onlar topilmadi")
+        else:
+            await message.answer("Вакансий по данному направлению не найдено")
         await Form.vacation_types.set()
-
 
 
 async def main():

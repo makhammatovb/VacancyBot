@@ -107,3 +107,107 @@ class Database:
             vacations = self.cursor.fetchall()
             self.close()
             return vacations
+
+    def get_questions(self, selected_vacation_type, lang):
+        self.connect()
+        if lang == "UZ":
+            self.cursor.execute("""
+            SELECT 
+                test.test_uz
+            FROM test 
+            JOIN vacation_type ON test.vacancy_type_id = vacation_type.id
+            WHERE vacation_type.name = ?
+            """, (selected_vacation_type,))
+            tests = self.cursor.fetchall()
+            self.close()
+            return tests
+        else:
+            self.cursor.execute("""
+                        SELECT 
+                        test.test_ru
+                        FROM test 
+                        JOIN vacation_type ON test.vacancy_type_id = vacation_type.id
+                        WHERE vacation_type.name = ?
+                        """, (selected_vacation_type,))
+            tests = self.cursor.fetchall()
+            self.close()
+            return tests
+
+    def update_answers(self, name, surname, birth_date, test_id, answers, lang):
+        try:
+            self.connect()
+            answers_str = '\n'.join(answers)
+
+            if lang == "UZ":
+                query = """
+                            UPDATE users
+                            SET test_id = ?, answer_uz = ?
+                            WHERE name = ? AND surname = ? AND birth_date = ?
+                            """
+                self.cursor.execute(query, (test_id, answers_str, name, surname, birth_date))
+            else:
+                query = """
+                            UPDATE users
+                            SET test_id = ?, answer_ru = ?
+                            WHERE name = ? AND surname = ? AND birth_date = ?
+                            """
+                self.cursor.execute(query, (test_id, answers_str, name, surname, birth_date))
+            self.conn.commit()
+        except sqlite3.Error as e:
+            print(f"An error occurred: {e}")
+        finally:
+            self.close()
+
+
+    def get_test_id(self, selected_vacation_type):
+        self.connect()
+        self.cursor.execute("""
+            SELECT test.id
+            FROM test
+            JOIN vacation_type ON test.vacancy_type_id = vacation_type.id
+            WHERE vacation_type.name = ?
+            LIMIT 1
+        """, (selected_vacation_type,))
+        test_id = self.cursor.fetchone()[0]
+        self.close()
+        print(test_id)
+        return test_id
+
+
+    def get_user_id(self, contact):
+        self.connect()
+        self.cursor.execute("SELECT id FROM users WHERE contact = ? LIMIT 1", (contact,))
+        user_row = self.cursor.fetchone()
+        self.close()
+        if user_row:
+            user_id = user_row[0]
+            print(user_id)
+            return user_id
+        return None
+
+    def insert_answers(self, name, surname, birth_date, test_id, answers, lang):
+        try:
+            self.connect()
+            answers_str = '\n'.join(answers)
+
+            if lang == "UZ":
+                query = """
+                    INSERT INTO answers (user_id, test_id, answer_uz)
+                    SELECT id, ?, ?
+                    FROM users
+                    WHERE name = ? AND surname = ? AND birth_date = ?
+                """
+                self.cursor.execute(query, (test_id, answers_str, name, surname, birth_date))
+            else:
+                query = """
+                    INSERT INTO answers (user_id, test_id, answer_ru)
+                    SELECT id, ?, ?
+                    FROM users
+                    WHERE name = ? AND surname = ? AND birth_date = ?
+                """
+                self.cursor.execute(query, (test_id, answers_str, name, surname, birth_date))
+            self.conn.commit()
+        except sqlite3.Error as e:
+            print(f"An error occurred: {e}")
+        finally:
+            self.close()
