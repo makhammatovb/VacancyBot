@@ -1,3 +1,5 @@
+from django.utils import timezone
+
 from django.db import models
 
 
@@ -92,3 +94,97 @@ class Answers(models.Model):
         db_table = 'answers'
         verbose_name = 'Answer'
         verbose_name_plural = 'Answers'
+
+
+class Expenses(models.Model):
+    date = models.DateField(default=timezone.now)
+    amount1 = models.DecimalField(max_digits=20, decimal_places=2)
+    description1 = models.TextField()
+    amount2 = models.DecimalField(max_digits=20, decimal_places=2, null=True, blank=True)
+    description2 = models.TextField(null=True, blank=True)
+    amount3 = models.DecimalField(max_digits=20, decimal_places=2, null=True, blank=True)
+    description3 = models.TextField(null=True, blank=True)
+    amount4 = models.DecimalField(max_digits=20, decimal_places=2, null=True, blank=True)
+    description4 = models.TextField(null=True, blank=True)
+    amount5 = models.DecimalField(max_digits=20, decimal_places=2, null=True, blank=True)
+    description5 = models.TextField(null=True, blank=True)
+    total = models.DecimalField(max_digits=20, decimal_places=2, default=0)
+
+    def save(self, *args, **kwargs):
+        self.total = (self.amount1 or 0) + (self.amount2 or 0) + (self.amount3 or 0) + (self.amount4 or 0) + (self.amount5 or 0)
+        super(Expenses, self).save(*args, **kwargs)
+
+    def __str__(self):
+        return f"{self.amount1} {self.description1}"
+
+    class Meta:
+        db_table = 'expenses'
+        verbose_name = 'Expense'
+        verbose_name_plural = 'Expenses'
+
+
+class Budget(models.Model):
+    date = models.DateField(unique=True)
+    total = models.DecimalField(max_digits=30, decimal_places=2, default=0)
+
+    def __str__(self):
+        return f"{self.date.strftime('%B %Y')}: {self.total}"
+
+    class Meta:
+        db_table = 'budget'
+        verbose_name = 'Budget'
+
+
+class VacancyCount(models.Model):
+    date = models.DateField(unique=True)
+    count = models.PositiveIntegerField(default=0)
+
+    def __str__(self):
+        return f"{self.date} {self.count}"
+
+    class Meta:
+        db_table = 'vacancy_count'
+        verbose_name = 'Vacancy Count'
+        verbose_name_plural = 'Vacancies Count'
+
+
+class Response(models.Model):
+    name = models.CharField(max_length=200)
+    hh_uz = models.PositiveIntegerField(default=0)
+    olx_uz = models.PositiveIntegerField(default=0)
+    telegram = models.PositiveIntegerField(default=0)
+    recommend = models.PositiveIntegerField(default=0)
+    total_dashboard = models.PositiveIntegerField(default=0)
+
+    def save(self, *args, **kwargs):
+        self.total_dashboard = self.hh_uz + self.olx_uz + self.telegram + self.recommend
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return self.name
+
+    class Meta:
+        db_table = 'response'
+        verbose_name = 'Response'
+        verbose_name_plural = 'Responses'
+
+
+class Plans(models.Model):
+    name = models.CharField(max_length=200)
+    quantity = models.PositiveIntegerField(default=0)
+    price = models.DecimalField(max_digits=20, decimal_places=2, default=0)
+    bonus = models.DecimalField(max_digits=20, decimal_places=2, default=0)
+    month = models.DecimalField(max_digits=20, decimal_places=2, default=0)
+    total = models.DecimalField(max_digits=20, decimal_places=2)
+
+    def save(self, *args, **kwargs):
+        self.total = self.price + self.bonus + self.month
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return self.name
+
+    class Meta:
+        db_table = 'plans'
+        verbose_name = 'Plan'
+        verbose_name_plural = 'Plans'
