@@ -7,4 +7,3 @@ class AppVacationsConfig(AppConfig):
 
     def ready(self):
         import app_vacations.signals
-
