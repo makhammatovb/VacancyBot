@@ -77,7 +77,7 @@ WSGI_APPLICATION = 'vacation.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': 'C:/Users/User/OneDrive/Рабочий стол/Excel/Najot/Vacations/vacation.db',
+        'NAME': BASE_DIR / 'db.sqlite3',
     }
 }
 
